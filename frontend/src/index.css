@@ -1,0 +1,8 @@
+@import "tailwindcss";
+
+/* In Tailwind 4, we define our custom body styles like this */
+@layer base {
+  body {
+    @apply bg-gray-900 text-white;
+  }
+}
