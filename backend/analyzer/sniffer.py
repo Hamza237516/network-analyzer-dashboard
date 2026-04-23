@@ -35,7 +35,7 @@ def process_packet(packet):
 
 def start_sniffing(interface="en0"):
     print(f"[*] Sniffing IPv4 + IPv6 on {interface}...")
-    # Change filter to "ip or ip6" to catch everything!
+   
     sniff(iface=interface, prn=process_packet, store=False, filter="ip or ip6")
 
 def run_sniffer_in_background(interface="en0"):
