@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { useWebSocket } from './hooks/useWebSocket';
 import { Activity, Shield, Zap, Database } from 'lucide-react';
 import { 
@@ -16,19 +16,29 @@ const PROTOCOL_COLORS = {
 
 function App() {
   const { packets, isConnected } = useWebSocket('ws://localhost:8000/ws/traffic');
+  // --- PASTE THIS HERE ---
+  const [isPaused, setIsPaused] = useState(false);
+  const [displayPackets, setDisplayPackets] = useState([]);
 
+  // This effect updates the screen only if NOT paused
+  useEffect(() => {
+    if (!isPaused) {
+      setDisplayPackets(packets);
+    }
+  }, [packets, isPaused]);
+  // ------------------------
   // Process raw packets into chart-friendly formats
   const { protocolData, timelineData, totalBytes } = useMemo(() => {
     const protocols = { TCP: 0, UDP: 0, ICMP: 0, Other: 0 };
     let bytes = 0;
     
-    // Line chart shows the last 50 packets
-    const timeline = packets.slice(-50).map((p, index) => ({
+    // Line chart now looks at the displayed (potentially frozen) data
+    const timeline = displayPackets.slice(-50).map((p, index) => ({
       time: index,
       size: p.size
     }));
 
-    packets.forEach(p => {
+    displayPackets.forEach(p => {
       if (protocols[p.protocol] !== undefined) {
         protocols[p.protocol]++;
       } else {
@@ -42,12 +52,30 @@ function App() {
       .filter(d => d.value > 0);
 
     return { protocolData: pieData, timelineData: timeline, totalBytes: bytes };
-  }, [packets]);
+  }, [displayPackets]); // <--- MAKE SURE THIS SAYS displayPackets
 
   return (
     <div className="min-h-screen p-8 bg-gray-900 text-white font-sans">
       {/* Header */}
       <header className="flex items-center justify-between mb-8 pb-4 border-b border-gray-800">
+      <div className="flex items-center space-x-4">
+          {/* PAUSE TOGGLE BUTTON */}
+          <button 
+            onClick={() => setIsPaused(!isPaused)}
+            className={`px-4 py-1.5 rounded-lg font-bold transition-all ${
+              isPaused 
+                ? 'bg-yellow-500 text-black hover:bg-yellow-400' 
+                : 'bg-gray-700 text-white hover:bg-gray-600'
+            }`}
+          >
+            {isPaused ? '▶ RESUME' : '⏸ PAUSE'}
+          </button>
+
+          <div className={`px-4 py-1.5 rounded-full text-sm font-bold flex items-center space-x-2 ${isConnected ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
+            {isConnected && <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></span>}
+            <span>{isConnected ? 'SYSTEM LIVE' : 'DISCONNECTED'}</span>
+          </div>
+        </div>
         <div className="flex items-center space-x-4">
           <Activity className="w-8 h-8 text-blue-500" />
           <h1 className="text-3xl font-bold tracking-tight">NetTraffic Analyzer</h1>
@@ -134,7 +162,7 @@ function App() {
               </tr>
             </thead>
             <tbody>
-              {packets.slice(-10).reverse().map((packet) => (
+             {displayPackets.slice(-10).reverse().map((packet) => (
                 <tr key={packet.id} className="border-b border-gray-700/50 hover:bg-gray-700/20 transition-colors">
                   <td className="px-6 py-4 font-mono text-gray-400">{new Date(packet.timestamp * 1000).toLocaleTimeString()}</td>
                   <td className="px-6 py-4 font-mono">{packet.src_ip}</td>
