@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { useWebSocket } from './hooks/useWebSocket';
-import { Activity, Shield, Zap, Database } from 'lucide-react';
+import { Activity, Shield, Zap, Database, Search } from 'lucide-react'; // Added Search icon
 import { 
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as ChartTooltip, ResponsiveContainer,
   PieChart, Pie, Cell 
@@ -16,9 +16,11 @@ const PROTOCOL_COLORS = {
 
 function App() {
   const { packets, isConnected } = useWebSocket('ws://localhost:8000/ws/traffic');
-  // --- PASTE THIS HERE ---
+  
+  // States
   const [isPaused, setIsPaused] = useState(false);
   const [displayPackets, setDisplayPackets] = useState([]);
+  const [searchTerm, setSearchTerm] = useState(''); // NEW: Search state
 
   // This effect updates the screen only if NOT paused
   useEffect(() => {
@@ -26,7 +28,14 @@ function App() {
       setDisplayPackets(packets);
     }
   }, [packets, isPaused]);
-  // ------------------------
+
+  // NEW: Filter logic for the table based on the search term
+  const filteredPackets = displayPackets.filter(packet => 
+    packet.src_ip.includes(searchTerm) || 
+    packet.dst_ip.includes(searchTerm) ||
+    packet.protocol.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
   // Process raw packets into chart-friendly formats
   const { protocolData, timelineData, totalBytes } = useMemo(() => {
     const protocols = { TCP: 0, UDP: 0, ICMP: 0, Other: 0 };
@@ -52,37 +61,35 @@ function App() {
       .filter(d => d.value > 0);
 
     return { protocolData: pieData, timelineData: timeline, totalBytes: bytes };
-  }, [displayPackets]); // <--- MAKE SURE THIS SAYS displayPackets
+  }, [displayPackets]); 
 
   return (
     <div className="min-h-screen p-8 bg-gray-900 text-white font-sans">
-      {/* Header */}
+      
+      {/* Cleaned Up Header */}
       <header className="flex items-center justify-between mb-8 pb-4 border-b border-gray-800">
-      <div className="flex items-center space-x-4">
+        <div className="flex items-center space-x-4">
+          <Activity className="w-8 h-8 text-blue-500" />
+          <h1 className="text-3xl font-bold tracking-tight">NetTraffic Analyzer</h1>
+        </div>
+        
+        <div className="flex items-center space-x-4">
           {/* PAUSE TOGGLE BUTTON */}
           <button 
             onClick={() => setIsPaused(!isPaused)}
-            className={`px-4 py-1.5 rounded-lg font-bold transition-all ${
+            className={`px-4 py-1.5 rounded-lg font-bold transition-all flex items-center space-x-2 ${
               isPaused 
                 ? 'bg-yellow-500 text-black hover:bg-yellow-400' 
                 : 'bg-gray-700 text-white hover:bg-gray-600'
             }`}
           >
-            {isPaused ? '▶ RESUME' : '⏸ PAUSE'}
+            <span>{isPaused ? '▶ RESUME' : '⏸ PAUSE'}</span>
           </button>
 
           <div className={`px-4 py-1.5 rounded-full text-sm font-bold flex items-center space-x-2 ${isConnected ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
             {isConnected && <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></span>}
             <span>{isConnected ? 'SYSTEM LIVE' : 'DISCONNECTED'}</span>
           </div>
-        </div>
-        <div className="flex items-center space-x-4">
-          <Activity className="w-8 h-8 text-blue-500" />
-          <h1 className="text-3xl font-bold tracking-tight">NetTraffic Analyzer</h1>
-        </div>
-        <div className={`px-4 py-1.5 rounded-full text-sm font-bold flex items-center space-x-2 ${isConnected ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
-          {isConnected && <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></span>}
-          <span>{isConnected ? 'SYSTEM LIVE' : 'DISCONNECTED'}</span>
         </div>
       </header>
 
@@ -147,9 +154,25 @@ function App() {
         </div>
       </div>
 
-      {/* Live Data Table */}
+      {/* NEW: Search Bar & Live Data Table */}
       <div className="bg-gray-800 p-6 rounded-2xl border border-gray-700 shadow-lg overflow-hidden">
-        <h2 className="text-lg font-bold mb-4 text-gray-200">Latest Captured Packets</h2>
+        
+        {/* Search Bar Header */}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+          <h2 className="text-lg font-bold text-gray-200">Latest Captured Packets</h2>
+          <div className="relative w-full sm:w-72">
+            <input
+              type="text"
+              placeholder="Search IP or Protocol..."
+              className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 pl-10 text-sm focus:outline-none focus:border-blue-500 transition-colors"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+            <Search className="absolute left-3 top-2.5 text-gray-500 w-4 h-4" />
+          </div>
+        </div>
+
+        {/* Table */}
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
             <thead className="text-xs text-gray-400 uppercase bg-gray-900/50">
@@ -162,7 +185,8 @@ function App() {
               </tr>
             </thead>
             <tbody>
-             {displayPackets.slice(-10).reverse().map((packet) => (
+             {/* Uses filteredPackets instead of displayPackets */}
+             {filteredPackets.slice(-10).reverse().map((packet) => (
                 <tr key={packet.id} className="border-b border-gray-700/50 hover:bg-gray-700/20 transition-colors">
                   <td className="px-6 py-4 font-mono text-gray-400">{new Date(packet.timestamp * 1000).toLocaleTimeString()}</td>
                   <td className="px-6 py-4 font-mono">{packet.src_ip}</td>
@@ -179,6 +203,15 @@ function App() {
                   <td className="px-6 py-4 font-mono">{packet.size}</td>
                 </tr>
               ))}
+              
+              {/* Optional: Show a message if search finds nothing */}
+              {filteredPackets.length === 0 && (
+                <tr>
+                  <td colSpan="5" className="px-6 py-8 text-center text-gray-500">
+                    No packets found matching "{searchTerm}"
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
